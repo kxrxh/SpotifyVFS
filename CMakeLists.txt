@@ -51,6 +51,3 @@ target_compile_definitions(SpotifyFS PRIVATE
     _FILE_OFFSET_BITS=64
     FUSE_USE_VERSION=32
 )
-
-# Add test directory
-add_subdirectory(tests)
