@@ -17,30 +17,24 @@ struct spotify_file {
 
 class SpotifyFileSystem {
 public:
-  static void init(std::string& access_token);
+  static void init();
   static int getFileAttributes(const char *path, struct stat *stbuf);
   static int listFiles(const char *path, void *buf, fuse_fill_dir_t filler,
                       off_t offset, struct fuse_file_info *fi);
   static int openFile(const char *path, struct fuse_file_info *fi);
   static int readFile(const char *path, char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi);
-  
-  // Spotify-specific operations
-  static int refreshPlaylists();
-  static int loadPlaylistTracks(const std::string& playlist_id);
-  static std::string getSpotifyId(const char *path);
-  static void cleanup();
-  static int createPlaylist(const char *path, mode_t mode);
-  static int removePlaylist(const char *path);
+  static int createFolder(const char *path, mode_t mode);
+  static int removeFolder(const char *path);
   static int createFile(const char *path, mode_t mode, struct fuse_file_info *fi);
+  static int removeFile(const char *path);
+  static int cleanup();
+  static int writeFile(const char *path, const char *buf, size_t size,
+                      off_t offset, struct fuse_file_info *fi);
+  static int truncateFile(const char *path, off_t size);
 
 private:
-  static std::string access_token;
   static std::unordered_map<std::string, struct spotify_file *> files;
-  
-  // Helper method to validate playlist name
-  static bool isValidPlaylistName(const std::string& name);
-  static bool isValidSongName(const std::string& name);
 };
 
 #endif // SPOTIFY_FS_H

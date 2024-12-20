@@ -5,18 +5,23 @@
 
 SpotifyAPI *SpotifyAPI::instance = nullptr;
 
-// Add this callback function for CURL
 size_t WriteCallback(char *contents, size_t size, size_t nmemb, void *userp) {
   ((std::string *)userp)->append((char *)contents, size * nmemb);
   return size * nmemb;
 }
 
-bool SpotifyAPI::init(std::string client_id, std::string client_secret) {
+SpotifyAPI *SpotifyAPI::getInstance() {
+  if (instance == nullptr) {
+    throw std::runtime_error("SpotifyAPI instance is null. Call init() first.");
+  }
+  return instance;
+}
+
+bool SpotifyAPI::init(std::string client_id) {
   if (instance == nullptr) {
     instance = new SpotifyAPI();
   }
   instance->client_id = client_id;
-  instance->client_secret = client_secret;
   instance->oauth();
   return true;
 }
@@ -34,12 +39,7 @@ std::string handleCallback(std::string callback_url) {
   return access_token;
 }
 
-SpotifyAPI *SpotifyAPI::getInstance() {
-  if (instance == nullptr) {
-    throw std::runtime_error("SpotifyAPI instance is null. Call init() first.");
-  }
-  return instance;
-}
+// OAuth flow
 void SpotifyAPI::oauth() {
   std::string redirect_uri = "http://localhost:3000";
   
@@ -73,5 +73,52 @@ void SpotifyAPI::oauth() {
   std::cin >> redirect_url;
   access_token = handleCallback(redirect_url);
 }
+std::vector<Playlist> SpotifyAPI::getAllPlaylists() {
+  std::string url = "https://api.spotify.com/v1/me/playlists";
+  std::string headers = "Authorization: Bearer " + access_token;
+  std::string response;
 
+  CURL *curl = curl_easy_init();
+  struct curl_slist *header_list = NULL;
+  header_list = curl_slist_append(header_list, headers.c_str());
 
+  // Set options to follow redirects and handle VPN issues
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Follow redirects
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); // Enable verbose output for debugging
+  curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
+  CURLcode res = curl_easy_perform(curl);
+  if (res != CURLE_OK) {
+    std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+  }
+
+  curl_slist_free_all(header_list);
+  curl_easy_cleanup(curl);
+
+  // Parse JSON response
+  Json::Value root;
+  Json::Reader reader;
+  std::vector<Playlist> playlists;
+
+  std::cout << "response: " << response << std::endl;
+
+  if (reader.parse(response, root)) {
+    const Json::Value items = root["items"];
+    std::cout << "Found " << items.size() << " playlists" << std::endl;
+    playlists.reserve(items.size());
+    for (const Json::Value& item : items) {
+      std::cout << "Found playlist: " << item["name"].asString() << std::endl;
+      Playlist playlist;
+      playlist.id = item["id"].asString();
+      playlist.name = item["name"].asString();
+      playlist.owner = item["owner"]["display_name"].asString();
+      playlists.push_back(playlist);
+    }
+  }
+
+  return playlists;
+}

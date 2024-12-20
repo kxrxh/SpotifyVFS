@@ -9,9 +9,12 @@ static struct fuse_operations spotify_oper = {
     .readdir = SpotifyFileSystem::listFiles,
     .open = SpotifyFileSystem::openFile,
     .read = SpotifyFileSystem::readFile,
-    .mkdir = SpotifyFileSystem::createPlaylist,
-    .rmdir = SpotifyFileSystem::removePlaylist,
+    .mkdir = SpotifyFileSystem::createFolder,
+    .rmdir = SpotifyFileSystem::removeFolder,
     .create = SpotifyFileSystem::createFile,
+    .unlink = SpotifyFileSystem::removeFile,
+    .write = SpotifyFileSystem::writeFile,
+    .truncate = SpotifyFileSystem::truncateFile,
 };
 
 // Main function.
@@ -21,12 +24,14 @@ int main(int argc, char *argv[]) {
 
   // Initialize Spotify filesystem with access token
   auto client_id = "a2b9e2d7538f4674bf704dc898c58564";
-  auto client_secret = "9bb3bcc7ea0b4f6eacb12347af4e1412";
-  if (!SpotifyAPI::init(client_id, client_secret)) {
+  if (!SpotifyAPI::init(client_id)) {
     std::cerr << "Failed to initialize SpotifyAPI" << std::endl;
     return -1;
   }
 
+  SpotifyFileSystem::init();
+  fuse_main(args.argc, args.argv, &spotify_oper, nullptr);
+  fuse_opt_free_args(&args);
 
   return ret;
 }
