@@ -10,7 +10,6 @@ static struct fuse_operations spotify_oper = {
     .open = SpotifyFileSystem::openFile,
     .read = SpotifyFileSystem::readFile,
     .mkdir = SpotifyFileSystem::createFolder,
-    .rmdir = SpotifyFileSystem::removeFolder,
     .create = SpotifyFileSystem::createFile,
     .unlink = SpotifyFileSystem::removeFile,
     .write = SpotifyFileSystem::writeFile,

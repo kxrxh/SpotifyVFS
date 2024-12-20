@@ -12,6 +12,7 @@ struct spotify_file {
   std::string artist;       // Artist name (for tracks)
   std::string album;        // Album name (for tracks)
   size_t duration_ms;       // Track duration in milliseconds
+  std::string uri;          // Spotify URI
   bool is_playlist;         // true if playlist, false if track
 };
 
@@ -25,7 +26,6 @@ public:
   static int readFile(const char *path, char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi);
   static int createFolder(const char *path, mode_t mode);
-  static int removeFolder(const char *path);
   static int createFile(const char *path, mode_t mode, struct fuse_file_info *fi);
   static int removeFile(const char *path);
   static int cleanup();
