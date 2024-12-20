@@ -207,7 +207,7 @@ bool SpotifyAPI::removeTrackFromPlaylist(std::string playlist_id, std::string tr
 
   // Create the request body with the track URI
   Json::Value trackObject;
-  trackObject["uri"] = "spotify:track:" + track_uri;
+  trackObject["uri"] = track_uri;
   
   Json::Value body;
   body["tracks"].append(trackObject);

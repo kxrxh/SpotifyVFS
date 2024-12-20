@@ -4,6 +4,7 @@
 #include <fuse.h>
 #include <string>
 #include <unordered_map>
+#include <fuse/fuse_lowlevel.h>
 
 // Spotify-specific file structure
 struct spotify_file {
@@ -33,6 +34,8 @@ public:
   static int writeFile(const char *path, const char *buf, size_t size,
                       off_t offset, struct fuse_file_info *fi);
   static int truncateFile(const char *path, off_t size);
+
+  static void spotify_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, struct fuse_file_info *fi);
 private:
   static std::unordered_map<std::string, struct spotify_file *> files;
 };
