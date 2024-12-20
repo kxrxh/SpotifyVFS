@@ -3,10 +3,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <errno.h>
-#include <unistd.h>
 #include <fuse/fuse_lowlevel.h>
-#include <thread>
 #include <iostream>
+#include <thread>
+#include <unistd.h>
 
 std::unordered_map<std::string, struct spotify_file *> SpotifyFileSystem::files;
 
@@ -158,74 +158,76 @@ int SpotifyFileSystem::createFolder(const char *path, mode_t mode) {
   return 0;
 }
 
-int SpotifyFileSystem::createFile(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    std::string path_str(path);
-    
-    // Ignore macOS metadata files
-    if (path_str.find("/._") != std::string::npos) {
-        return -EACCES;
-    }
+int SpotifyFileSystem::createFile(const char *path, mode_t mode,
+                                  struct fuse_file_info *fi) {
+  std::string path_str(path);
 
-    std::string filename = path_str.substr(path_str.find_last_of('/') + 1);
-    std::string dir_path = path_str.substr(0, path_str.find_last_of('/'));
+  // Ignore macOS metadata files
+  if (path_str.find("/._") != std::string::npos) {
+    return -EACCES;
+  }
 
-    // Find the playlist
-    auto playlist_it = files.find(dir_path);
-    if (playlist_it == files.end() || !playlist_it->second->is_playlist) {
-        return -ENOENT;
-    }
+  std::string filename = path_str.substr(path_str.find_last_of('/') + 1);
+  std::string dir_path = path_str.substr(0, path_str.find_last_of('/'));
 
-    // URL encode spaces in the search query
-    std::string track_query = filename;
-    size_t pos = 0;
-    while ((pos = track_query.find(" ", pos)) != std::string::npos) {
-        track_query.replace(pos, 1, "%20");
-        pos += 3;
-    }
+  // Find the playlist
+  auto playlist_it = files.find(dir_path);
+  if (playlist_it == files.end() || !playlist_it->second->is_playlist) {
+    return -ENOENT;
+  }
 
-    // Search for track and get info
-    SpotifyAPI *api = SpotifyAPI::getInstance();
-    std::string track_id = api->searchTrack(track_query);
-    if (track_id.empty()) {
-        return -ENOENT;
-    }
+  // URL encode spaces in the search query
+  std::string track_query = filename;
+  size_t pos = 0;
+  while ((pos = track_query.find(" ", pos)) != std::string::npos) {
+    track_query.replace(pos, 1, "%20");
+    pos += 3;
+  }
 
-    Track track = api->getTrackInfo(track_id);
-    if (track.id.empty()) {
-        return -ENOENT;
-    }
+  // Search for track and get info
+  SpotifyAPI *api = SpotifyAPI::getInstance();
+  std::string track_id = api->searchTrack(track_query);
+  if (track_id.empty()) {
+    return -ENOENT;
+  }
 
-    // Add track to playlist
-    bool success = api->addTrackToPlaylist(playlist_it->second->id, track.id);
-    if (!success) {
-        return -EACCES;
-    }
+  Track track = api->getTrackInfo(track_id);
+  if (track.id.empty()) {
+    return -ENOENT;
+  }
 
-    std::cout << "Added track: " << track.artist << " -- " << track.name << std::endl;
+  // Add track to playlist
+  bool success = api->addTrackToPlaylist(playlist_it->second->id, track.id);
+  if (!success) {
+    return -EACCES;
+  }
 
-    // Create file entry
-    auto file = new spotify_file();
-    file->id = track_id;
-    file->name = track.artist + " -- " + track.name;
-    file->is_playlist = false;
-    file->duration_ms = track.duration_ms;
-    file->uri = track.uri;
+  std::cout << "Added track: " << track.artist << " -- " << track.name
+            << std::endl;
 
-    // First store with original path to let touch complete
-    files[path_str] = file;
+  // Create file entry
+  auto file = new spotify_file();
+  file->id = track_id;
+  file->name = track.artist + " -- " + track.name;
+  file->is_playlist = false;
+  file->duration_ms = track.duration_ms;
+  file->uri = track.uri;
 
-    // Create custom path and store the file there
-    std::string custom_path = dir_path + "/" + file->name;
-    files[custom_path] = file;
+  // First store with original path to let touch complete
+  files[path_str] = file;
 
-    // Schedule removal of the original path entry
-    // We need to do this after a short delay to ensure touch completes
-    std::thread([path_str]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        files.erase(path_str);
-    }).detach();
+  // Create custom path and store the file there
+  std::string custom_path = dir_path + "/" + file->name;
+  files[custom_path] = file;
 
-    return 0;
+  // Schedule removal of the original path entry
+  // We need to do this after a short delay to ensure touch completes
+  std::thread([path_str]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    files.erase(path_str);
+  }).detach();
+
+  return 0;
 }
 
 int SpotifyFileSystem::removeFile(const char *path) {
@@ -287,88 +289,90 @@ int SpotifyFileSystem::truncateFile(const char *path, off_t size) {
   return 0;
 }
 
-void SpotifyFileSystem::spotify_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, 
-                                        mode_t mode, struct fuse_file_info *fi) {
-    std::string path_str(name);
-    
-    // Ignore macOS metadata files
-    if (path_str.find("/._") != std::string::npos) {
-        fuse_reply_err(req, EACCES);
-        return;
-    }
+void SpotifyFileSystem::spotify_ll_create(fuse_req_t req, fuse_ino_t parent,
+                                          const char *name, mode_t mode,
+                                          struct fuse_file_info *fi) {
+  std::string path_str(name);
 
-    // Check if file already exists
-    auto existing_file = files.find(path_str);
-    if (existing_file != files.end()) {
-        fuse_reply_err(req, EEXIST);
-        return;
-    }
+  // Ignore macOS metadata files
+  if (path_str.find("/._") != std::string::npos) {
+    fuse_reply_err(req, EACCES);
+    return;
+  }
 
-    std::string filename = path_str.substr(path_str.find_last_of('/') + 1);
+  // Check if file already exists
+  auto existing_file = files.find(path_str);
+  if (existing_file != files.end()) {
+    fuse_reply_err(req, EEXIST);
+    return;
+  }
 
-    // URL encode spaces in the search query
-    std::string track_query = filename;
-    size_t pos = 0;
-    while ((pos = track_query.find(" ", pos)) != std::string::npos) {
-        track_query.replace(pos, 1, "%20");
-        pos += 3;
-    }
+  std::string filename = path_str.substr(path_str.find_last_of('/') + 1);
 
-    // Find the playlist
-    auto playlist_it = files.find(path_str.substr(0, path_str.find_last_of('/')));
-    if (playlist_it == files.end() || !playlist_it->second->is_playlist) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
+  // URL encode spaces in the search query
+  std::string track_query = filename;
+  size_t pos = 0;
+  while ((pos = track_query.find(" ", pos)) != std::string::npos) {
+    track_query.replace(pos, 1, "%20");
+    pos += 3;
+  }
 
-    // Search for track and get info
-    SpotifyAPI *api = SpotifyAPI::getInstance();
-    std::string track_id = api->searchTrack(track_query);
-    if (track_id.empty()) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
+  // Find the playlist
+  auto playlist_it = files.find(path_str.substr(0, path_str.find_last_of('/')));
+  if (playlist_it == files.end() || !playlist_it->second->is_playlist) {
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
 
-    Track track = api->getTrackInfo(track_id);
-    if (track.id.empty()) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
+  // Search for track and get info
+  SpotifyAPI *api = SpotifyAPI::getInstance();
+  std::string track_id = api->searchTrack(track_query);
+  if (track_id.empty()) {
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
 
-    // Add track to playlist
-    bool success = api->addTrackToPlaylist(playlist_it->second->id, track.id);
-    if (!success) {
-        fuse_reply_err(req, EACCES);
-        return;
-    }
+  Track track = api->getTrackInfo(track_id);
+  if (track.id.empty()) {
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
 
-    std::cout << "Added track: " << track.artist << " -- " << track.name << std::endl;
+  // Add track to playlist
+  bool success = api->addTrackToPlaylist(playlist_it->second->id, track.id);
+  if (!success) {
+    fuse_reply_err(req, EACCES);
+    return;
+  }
 
-    // Create file entry
-    auto file = new spotify_file();
-    file->id = track.id;
-    file->name = track.artist + " -- " + track.name;
-    file->original_name = filename;
-    file->is_playlist = false;
-    file->duration_ms = track.duration_ms;
-    file->uri = track.uri;
+  std::cout << "Added track: " << track.artist << " -- " << track.name
+            << std::endl;
 
-    // Set up entry attributes
-    struct fuse_entry_param e;
-    memset(&e, 0, sizeof(e));
-    e.ino = random();  // You might want to implement proper inode allocation
-    e.attr.st_mode = S_IFREG | 0666;
-    e.attr.st_nlink = 1;
-    e.attr.st_uid = getuid();
-    e.attr.st_gid = getgid();
-    e.attr.st_size = track.duration_ms > 0 ? track.duration_ms : 1024;
-    e.attr.st_mtime = time(NULL);
-    e.generation = 1;
-    e.attr_timeout = 1.0;
-    e.entry_timeout = 1.0;
+  // Create file entry
+  auto file = new spotify_file();
+  file->id = track.id;
+  file->name = track.artist + " -- " + track.name;
+  file->original_name = filename;
+  file->is_playlist = false;
+  file->duration_ms = track.duration_ms;
+  file->uri = track.uri;
 
-    files[path_str] = file;
-    
-    // Reply with the entry parameters
-    fuse_reply_create(req, &e, fi);
+  // Set up entry attributes
+  struct fuse_entry_param e;
+  memset(&e, 0, sizeof(e));
+  e.ino = random(); // You might want to implement proper inode allocation
+  e.attr.st_mode = S_IFREG | 0666;
+  e.attr.st_nlink = 1;
+  e.attr.st_uid = getuid();
+  e.attr.st_gid = getgid();
+  e.attr.st_size = track.duration_ms > 0 ? track.duration_ms : 1024;
+  e.attr.st_mtime = time(NULL);
+  e.generation = 1;
+  e.attr_timeout = 1.0;
+  e.entry_timeout = 1.0;
+
+  files[path_str] = file;
+
+  // Reply with the entry parameters
+  fuse_reply_create(req, &e, fi);
 }

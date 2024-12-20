@@ -58,7 +58,9 @@ void SpotifyAPI::oauth() {
   }
 
   // Build authorization URL
-  std::string scope = "user-read-private user-read-email playlist-modify-private playlist-modify-public user-library-modify";
+  std::string scope =
+      "user-read-private user-read-email playlist-modify-private "
+      "playlist-modify-public user-library-modify";
   std::string auth_url = "https://accounts.spotify.com/authorize";
   auth_url += "?response_type=token";
   auth_url += "&client_id=" + client_id;
@@ -126,9 +128,9 @@ std::vector<Track> SpotifyAPI::getPlaylistTracks(std::string playlist_id) {
   bool first_page = true;
 
   do {
-    std::string url = "https://api.spotify.com/v1/playlists/" + playlist_id + 
-                     "/tracks?offset=" + std::to_string(offset) + 
-                     "&limit=" + std::to_string(limit);
+    std::string url = "https://api.spotify.com/v1/playlists/" + playlist_id +
+                      "/tracks?offset=" + std::to_string(offset) +
+                      "&limit=" + std::to_string(limit);
 
     // Set up headers
     cpr::Header headers = {{"Authorization", "Bearer " + access_token}};
@@ -149,7 +151,8 @@ std::vector<Track> SpotifyAPI::getPlaylistTracks(std::string playlist_id) {
         }
 
         const Json::Value items = root["items"];
-        std::cout << "Fetched " << items.size() << " tracks at offset " << offset << std::endl;
+        std::cout << "Fetched " << items.size() << " tracks at offset "
+                  << offset << std::endl;
 
         for (const Json::Value &item : items) {
           Track track;
@@ -175,8 +178,10 @@ std::vector<Track> SpotifyAPI::getPlaylistTracks(std::string playlist_id) {
   return tracks;
 }
 
-bool SpotifyAPI::addTrackToPlaylist(std::string playlist_id, std::string track_uri) {
-  std::string url = "https://api.spotify.com/v1/playlists/" + playlist_id + "/tracks";
+bool SpotifyAPI::addTrackToPlaylist(std::string playlist_id,
+                                    std::string track_uri) {
+  std::string url =
+      "https://api.spotify.com/v1/playlists/" + playlist_id + "/tracks";
 
   // Set up headers
   cpr::Header headers = {{"Authorization", "Bearer " + access_token}};
@@ -185,48 +190,50 @@ bool SpotifyAPI::addTrackToPlaylist(std::string playlist_id, std::string track_u
   Json::Value body;
   body["uris"].append("spotify:track:" + track_uri);
   body["position"] = 0;
-  auto response = cpr::Post(cpr::Url{url}, headers, cpr::Body{body.toStyledString()}, cpr::VerifySsl{false});
+  auto response =
+      cpr::Post(cpr::Url{url}, headers, cpr::Body{body.toStyledString()},
+                cpr::VerifySsl{false});
 
   if (response.status_code == 201) {
     return true;
   } else {
-    std::cerr << "Request failed with status code: " << response.status_code << std::endl;
+    std::cerr << "Request failed with status code: " << response.status_code
+              << std::endl;
     std::cerr << "Body: " << response.text << std::endl;
     return false;
   }
 }
 
-bool SpotifyAPI::removeTrackFromPlaylist(std::string playlist_id, std::string track_uri) {
-  std::string url = "https://api.spotify.com/v1/playlists/" + playlist_id + "/tracks";
+bool SpotifyAPI::removeTrackFromPlaylist(std::string playlist_id,
+                                         std::string track_uri) {
+  std::string url =
+      "https://api.spotify.com/v1/playlists/" + playlist_id + "/tracks";
 
   // Set up headers
-  cpr::Header headers = {
-    {"Authorization", "Bearer " + access_token},
-    {"Content-Type", "application/json"}
-  };
+  cpr::Header headers = {{"Authorization", "Bearer " + access_token},
+                         {"Content-Type", "application/json"}};
 
   // Create the request body with the track URI
   Json::Value trackObject;
   trackObject["uri"] = track_uri;
-  
+
   Json::Value body;
   body["tracks"].append(trackObject);
 
   // Make DELETE request
-  auto response = cpr::Delete(cpr::Url{url}, 
-                            headers, 
-                            cpr::Body{body.toStyledString()}, 
-                            cpr::VerifySsl{false});
+  auto response =
+      cpr::Delete(cpr::Url{url}, headers, cpr::Body{body.toStyledString()},
+                  cpr::VerifySsl{false});
 
   if (response.status_code == 200) {
     return true;
   } else {
-    std::cerr << "Request failed with status code: " << response.status_code << std::endl;
+    std::cerr << "Request failed with status code: " << response.status_code
+              << std::endl;
     std::cerr << "Body: " << response.text << std::endl;
     return false;
   }
 }
-
 
 std::string SpotifyAPI::getUserId() {
   std::string url = "https://api.spotify.com/v1/me";
@@ -234,7 +241,7 @@ std::string SpotifyAPI::getUserId() {
   // Set up headers
   cpr::Header headers = {{"Authorization", "Bearer " + access_token}};
 
-  // Make GET request 
+  // Make GET request
   auto response = cpr::Get(cpr::Url{url}, headers, cpr::VerifySsl{false});
 
   if (response.status_code == 200) {
@@ -247,9 +254,10 @@ std::string SpotifyAPI::getUserId() {
   return "";
 }
 
-
-bool SpotifyAPI::createPlaylist(std::string name, std::string description, bool is_public) {
-  std::string url = "https://api.spotify.com/v1/users/" + getUserId() + "/playlists";
+bool SpotifyAPI::createPlaylist(std::string name, std::string description,
+                                bool is_public) {
+  std::string url =
+      "https://api.spotify.com/v1/users/" + getUserId() + "/playlists";
 
   // Set up headers
   cpr::Header headers = {{"Authorization", "Bearer " + access_token}};
@@ -260,19 +268,23 @@ bool SpotifyAPI::createPlaylist(std::string name, std::string description, bool 
   body["description"] = "New playlist created by SpotifyFS";
   body["public"] = is_public;
 
-  auto response = cpr::Post(cpr::Url{url}, headers, cpr::Body{body.toStyledString()}, cpr::VerifySsl{false});
+  auto response =
+      cpr::Post(cpr::Url{url}, headers, cpr::Body{body.toStyledString()},
+                cpr::VerifySsl{false});
 
   if (response.status_code == 201) {
     return true;
   } else {
-    std::cerr << "Request failed with status code: " << response.status_code << std::endl;
+    std::cerr << "Request failed with status code: " << response.status_code
+              << std::endl;
     std::cerr << "Body: " << response.text << std::endl;
     return false;
   }
 }
 
 std::string SpotifyAPI::searchTrack(std::string query) {
-  std::string url = "https://api.spotify.com/v1/search?q=" + query + "&type=track";
+  std::string url =
+      "https://api.spotify.com/v1/search?q=" + query + "&type=track";
 
   // Set up headers
   cpr::Header headers = {{"Authorization", "Bearer " + access_token}};
@@ -300,7 +312,7 @@ Track SpotifyAPI::getTrackInfo(std::string track_id) {
   // Make GET request
   auto response = cpr::Get(cpr::Url{url}, headers, cpr::VerifySsl{false});
 
-  if (response.status_code == 200) {  
+  if (response.status_code == 200) {
     Json::Value root;
     Json::Reader reader;
     if (reader.parse(response.text, root)) {
