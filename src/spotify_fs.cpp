@@ -4,7 +4,7 @@
 #include <cstring>
 #include <errno.h>
 #include <unistd.h>
-#include <iostream>
+
 std::unordered_map<std::string, struct spotify_file *> SpotifyFileSystem::files;
 
 void SpotifyFileSystem::init() {
@@ -17,9 +17,10 @@ void SpotifyFileSystem::init() {
     pl->name = playlist.name;
     pl->is_playlist = true;
     files["/" + pl->name] = pl;
-    
+
     // Load tracks for this playlist
-    std::vector<Track> tracks = SpotifyAPI::getInstance()->getPlaylistTracks(playlist.id);
+    std::vector<Track> tracks =
+        SpotifyAPI::getInstance()->getPlaylistTracks(playlist.id);
     for (const auto &track : tracks) {
       auto track_file = new spotify_file();
       track_file->id = track.id;
@@ -29,14 +30,12 @@ void SpotifyFileSystem::init() {
       track_file->uri = track.uri;
       // Store track with path: /playlist_name/track_name
       files["/" + pl->name + "/" + track_file->name] = track_file;
-      
     }
   }
 }
 
 int SpotifyFileSystem::getFileAttributes(const char *path, struct stat *stbuf) {
   memset(stbuf, 0, sizeof(struct stat));
-  
 
   if (strcmp(path, "/") == 0) {
     stbuf->st_mode = S_IFDIR | 0777;
@@ -55,7 +54,8 @@ int SpotifyFileSystem::getFileAttributes(const char *path, struct stat *stbuf) {
     } else {
       stbuf->st_mode = S_IFREG | 0666;
       stbuf->st_nlink = 1;
-      stbuf->st_size = it->second->duration_ms > 0 ? it->second->duration_ms : 1024;
+      stbuf->st_size =
+          it->second->duration_ms > 0 ? it->second->duration_ms : 1024;
     }
     stbuf->st_uid = getuid();
     stbuf->st_gid = getgid();
@@ -76,6 +76,7 @@ int SpotifyFileSystem::listFiles(const char *path, void *buf,
     // List all playlists in root
     for (const auto &pair : files) {
       if (pair.second->is_playlist) {
+        // Use original name for playlists
         std::string name = pair.second->name;
         filler(buf, name.c_str(), NULL, 0);
       }
@@ -85,8 +86,10 @@ int SpotifyFileSystem::listFiles(const char *path, void *buf,
     for (const auto &pair : files) {
       std::string parent_path = std::string(path) + "/";
       if (pair.first.find(parent_path) == 0 && !pair.second->is_playlist) {
-        std::string name = pair.second->name;
-        filler(buf, name.c_str(), NULL, 0);
+        // Use the original filename instead of the formatted name
+        std::string filename =
+            pair.first.substr(pair.first.find_last_of('/') + 1);
+        filler(buf, filename.c_str(), NULL, 0);
       }
     }
   }
@@ -111,16 +114,16 @@ int SpotifyFileSystem::readFile(const char *path, char *buf, size_t size,
   // Skip opening Spotify if we're in file creation or if it's a hidden file
   std::string path_str(path);
   std::string filename = path_str.substr(path_str.find_last_of('/') + 1);
-  if (filename[0] != '.') {  // Only open Spotify for non-hidden files
+  if (filename[0] != '.') { // Only open Spotify for non-hidden files
     std::string uri = it->second->uri;
     std::string command;
-    
-    #ifdef __APPLE__
-      command = "open spotify:track:" + uri;
-    #else
-      command = "xdg-open spotify:track:" + uri;
-    #endif
-    
+
+#ifdef __APPLE__
+    command = "open spotify:track:" + uri;
+#else
+    command = "xdg-open spotify:track:" + uri;
+#endif
+
     system(command.c_str());
   }
 
@@ -139,11 +142,12 @@ int SpotifyFileSystem::readFile(const char *path, char *buf, size_t size,
 
 int SpotifyFileSystem::createFolder(const char *path, mode_t mode) {
   std::string name = std::string(path).substr(1); // Remove leading '/'
-  bool success = SpotifyAPI::getInstance()->createPlaylist(name, "Created via SpotifyFS", true);
+  bool success = SpotifyAPI::getInstance()->createPlaylist(
+      name, "Created via SpotifyFS", true);
   if (!success) {
     return -EACCES;
   }
-  
+
   auto pl = new spotify_file();
   pl->name = name;
   pl->is_playlist = true;
@@ -156,16 +160,16 @@ int SpotifyFileSystem::createFile(const char *path, mode_t mode,
   // Ignore macOS metadata files
   std::string path_str(path);
   if (path_str.find("/._") != std::string::npos) {
-    return -EACCES;  // Deny creation of ._ files
+    return -EACCES; // Deny creation of ._ files
   }
-  
+
   auto existing_file = files.find(path);
   if (existing_file != files.end()) {
     return -EEXIST;
   }
 
   std::string filename = path_str.substr(path_str.find_last_of('/') + 1);
-  
+
   // URL encode spaces in the search query
   std::string track_query = filename;
   size_t pos = 0;
@@ -181,7 +185,7 @@ int SpotifyFileSystem::createFile(const char *path, mode_t mode,
   }
 
   // Search for track
-  SpotifyAPI* api = SpotifyAPI::getInstance();
+  SpotifyAPI *api = SpotifyAPI::getInstance();
   std::string track_id = api->searchTrack(track_query);
   if (track_id.empty()) {
     return -ENOENT;
@@ -203,11 +207,22 @@ int SpotifyFileSystem::createFile(const char *path, mode_t mode,
   auto file = new spotify_file();
   file->id = track.id;
   file->name = track.artist + " -- " + track.name;
+  file->original_name = filename; // Store the original filename
   file->is_playlist = false;
   file->duration_ms = track.duration_ms;
   file->uri = track.uri;
-  files[path] = file;
 
+  // Set up the file immediately with proper attributes
+  struct stat stbuf;
+  memset(&stbuf, 0, sizeof(struct stat));
+  stbuf.st_mode = S_IFREG | 0666;
+  stbuf.st_nlink = 1;
+  stbuf.st_uid = getuid();
+  stbuf.st_gid = getgid();
+  stbuf.st_size = track.duration_ms > 0 ? track.duration_ms : 1024;
+  stbuf.st_mtime = time(NULL);
+
+  files[path] = file;
   return 0;
 }
 
@@ -218,21 +233,21 @@ int SpotifyFileSystem::removeFile(const char *path) {
   }
 
   if (it->second->is_playlist) {
-    // TODO: Add deletePlaylist to SpotifyAPI
+    // SpotifyAPI doesn't support deleting playlists
     return -EACCES;
   } else {
     // Find parent playlist
     std::string path_str(path);
     size_t slash_pos = path_str.find_last_of('/');
     std::string playlist_path = path_str.substr(0, slash_pos);
-    
+
     auto playlist_it = files.find(playlist_path);
     if (playlist_it == files.end() || !playlist_it->second->is_playlist) {
       return -ENOENT;
     }
 
     bool success = SpotifyAPI::getInstance()->removeTrackFromPlaylist(
-      playlist_it->second->id, it->second->uri);
+        playlist_it->second->id, it->second->uri);
     if (!success) {
       return -EACCES;
     }

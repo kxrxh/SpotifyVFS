@@ -14,6 +14,7 @@ struct spotify_file {
   size_t duration_ms;       // Track duration in milliseconds
   std::string uri;          // Spotify URI
   bool is_playlist;         // true if playlist, false if track
+  std::string original_name; // Original name of the file
 };
 
 class SpotifyFileSystem {
@@ -32,7 +33,6 @@ public:
   static int writeFile(const char *path, const char *buf, size_t size,
                       off_t offset, struct fuse_file_info *fi);
   static int truncateFile(const char *path, off_t size);
-
 private:
   static std::unordered_map<std::string, struct spotify_file *> files;
 };
