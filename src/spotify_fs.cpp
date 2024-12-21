@@ -176,12 +176,16 @@ int SpotifyFileSystem::createFile(const char *path, mode_t mode,
     return -ENOENT;
   }
 
-  // URL encode spaces in the search query
-  std::string track_query = filename;
-  size_t pos = 0;
-  while ((pos = track_query.find(" ", pos)) != std::string::npos) {
-    track_query.replace(pos, 1, "%20");
-    pos += 3;
+  // URL encode the entire query string
+  std::string track_query;
+  for (unsigned char c : filename) {
+    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      track_query += c;
+    } else {
+      char hex[4];
+      snprintf(hex, sizeof(hex), "%%%02X", c);
+      track_query += hex;
+    }
   }
 
   // Search for track and get info

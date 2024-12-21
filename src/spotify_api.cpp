@@ -283,8 +283,14 @@ bool SpotifyAPI::createPlaylist(std::string name, std::string description,
 }
 
 std::string SpotifyAPI::searchTrack(std::string query) {
-  std::string url =
-      "https://api.spotify.com/v1/search?q=" + query + "&type=track";
+  // URL encode the query parameter properly
+  CURL *curl = curl_easy_init();
+  char *encoded_query = curl_easy_escape(curl, query.c_str(), query.length());
+  std::string url = "https://api.spotify.com/v1/search?q=" + 
+                    std::string(encoded_query) + 
+                    "&type=track";
+  curl_free(encoded_query);
+  curl_easy_cleanup(curl);
 
   // Set up headers
   cpr::Header headers = {{"Authorization", "Bearer " + access_token}};
@@ -296,8 +302,14 @@ std::string SpotifyAPI::searchTrack(std::string query) {
     Json::Value root;
     Json::Reader reader;
     if (reader.parse(response.text, root)) {
-      return root["tracks"]["items"][0]["id"].asString();
+      const Json::Value& items = root["tracks"]["items"];
+      if (!items.empty()) {
+        return items[0]["id"].asString();
+      }
     }
+  } else {
+    std::cerr << "Search failed with status code: " << response.status_code << std::endl;
+    std::cerr << "Response: " << response.text << std::endl;
   }
 
   return "";
