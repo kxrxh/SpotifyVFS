@@ -254,7 +254,7 @@ std::string SpotifyAPI::getUserId() {
   return "";
 }
 
-bool SpotifyAPI::createPlaylist(std::string name, std::string description,
+Playlist SpotifyAPI::createPlaylist(std::string name, std::string description,
                                 bool is_public) {
   std::string url =
       "https://api.spotify.com/v1/users/" + getUserId() + "/playlists";
@@ -272,14 +272,21 @@ bool SpotifyAPI::createPlaylist(std::string name, std::string description,
       cpr::Post(cpr::Url{url}, headers, cpr::Body{body.toStyledString()},
                 cpr::VerifySsl{false});
 
+  Playlist playlist;
   if (response.status_code == 201) {
-    return true;
+    Json::Value root;
+    Json::Reader reader;
+    if (reader.parse(response.text, root)) {
+      playlist.id = root["id"].asString();
+      playlist.name = root["name"].asString();
+      playlist.owner = root["owner"]["id"].asString();
+    }
   } else {
     std::cerr << "Request failed with status code: " << response.status_code
               << std::endl;
     std::cerr << "Body: " << response.text << std::endl;
-    return false;
   }
+  return playlist;
 }
 
 std::string SpotifyAPI::searchTrack(std::string query) {
@@ -314,6 +321,8 @@ std::string SpotifyAPI::searchTrack(std::string query) {
 
   return "";
 }
+
+
 
 Track SpotifyAPI::getTrackInfo(std::string track_id) {
   std::string url = "https://api.spotify.com/v1/tracks/" + track_id;

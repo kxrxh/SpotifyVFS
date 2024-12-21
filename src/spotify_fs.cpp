@@ -145,13 +145,14 @@ int SpotifyFileSystem::readFile(const char *path, char *buf, size_t size,
 
 int SpotifyFileSystem::createFolder(const char *path, mode_t mode) {
   std::string name = std::string(path).substr(1); // Remove leading '/'
-  bool success = SpotifyAPI::getInstance()->createPlaylist(
+  Playlist playlist = SpotifyAPI::getInstance()->createPlaylist(
       name, "Created via SpotifyFS", true);
-  if (!success) {
+  if (playlist.id.empty()) {
     return -EACCES;
   }
 
   auto pl = new spotify_file();
+  pl->id = playlist.id;
   pl->name = name;
   pl->is_playlist = true;
   files[path] = pl;
